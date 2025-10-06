@@ -1,3 +1,5 @@
+import sys
+sys.path.append('../modules')
 import numpy as np
 import torch
 import torch.nn as nn
@@ -10,15 +12,18 @@ try:
 except:
     NVIDIA_SMI = False
 import matplotlib.pyplot as pl
-import sys
-sys.path.append('../modules')
+#import sys
+#sys.path.append('../modules')
 import mlp
-import datasets
+#import datasets # L: THIS MODULE (AND ITS CONTENTS ARE NOT HERE! THEY WERE IN THE PREVIOUS CODE THAT WAS SENT)
+import dataset # L: modified
 import normalize
 import symlog
 import resnet
 import glob
 from einops import rearrange
+
+NVIDIA_SMI = False # L: added
     
 class CLIPLoss(nn.Module):
     """ Simple contrastive loss for CLIP
@@ -50,11 +55,24 @@ class Training(object):
         self.gpu = gpu        
         self.device = torch.device(f"cuda:{self.gpu}" if self.cuda else "cpu")
 
-        if (NVIDIA_SMI):
-            self.handle = Device.all()[self.gpu]
+        #if (NVIDIA_SMI):
+        #    self.handle = Device.all()[self.gpu]
             
-            print("Computing in {0} : {1}".format(self.device, self.handle.name()))
-        
+        #    print("Computing in {0} : {1}".format(self.device, self.handle.name()))
+        # L: modified this to keep it from crashing again
+        if NVIDIA_SMI and torch.cuda.is_available():
+            try:
+                self.handle = Device.all()[self.gpu]
+                print(f"Computing in {self.device} : {self.handle.name()}")
+            except Exception:
+                print("NVIDIA device not found, running on CPU instead.")
+                self.device = torch.device("cpu")
+                self.handle = None
+            else:
+                print("Running on CPU (no GPU or NVML detected).")
+                self.device = torch.device("cpu")
+                self.handle = None
+
         self.batch_size = batch_size
         
         # Model
@@ -70,16 +88,25 @@ class Training(object):
         #                             n_hidden=self.hyperparameters['mlp']['num_layers_mlp'],
         #                             activation=nn.ReLU()).to(self.device)
         
-        self.encoding_models = resnet.ResidualNet(in_features=6*11, 
-                      out_features=self.config['latent_dim'],
+        #self.encoding_models = resnet.ResidualNet(in_features=6*11, 
+        #              out_features=self.config['mlp']['latent_dim'],
+        #              hidden_features=self.config['mlp']['n_hidden_mlp'],
+        #              num_blocks=self.config['mlp']['num_layers_mlp'],
+        #              activation=F.gelu,
+        #              dropout_probability=0.1,
+        #              use_batch_norm=True).to(self.device)
+        
+        # L: modified to match train_clip.py due to size mismatch error
+        self.encoding_models = resnet.ResidualNet(in_features=6*80,
+                      out_features=self.config['mlp']['latent_dim'],
                       hidden_features=self.config['mlp']['n_hidden_mlp'],
                       num_blocks=self.config['mlp']['num_layers_mlp'],
                       activation=F.gelu,
-                      dropout_probability=0.1,
+                      dropout_probability=self.config['mlp']['dropout_probability'],
                       use_batch_norm=True).to(self.device)
         
         self.encoding_stokes = resnet.ResidualNet(in_features=4*112, 
-                      out_features=self.config['latent_dim'],
+                      out_features=self.config['mlp']['latent_dim'],
                       hidden_features=self.config['mlp']['n_hidden_mlp'],
                       num_blocks=self.config['mlp']['num_layers_mlp'],
                       activation=F.gelu,
@@ -87,8 +114,11 @@ class Training(object):
                       use_batch_norm=True).to(self.device)
 
         print("Setting weights of the model...")        
-        self.encoding_models.load_state_dict(chk['encoding_models_dict'])
-        self.encoding_stokes.load_state_dict(chk['encoding_stokes_dict'])
+        #self.encoding_models.load_state_dict(chk['encoding_models_dict'])
+        #self.encoding_stokes.load_state_dict(chk['encoding_stokes_dict'])
+        # L: modified to match the checkpoints saved in train
+        self.encoding_models.load_state_dict(chk['encoder_models_dict'])
+        self.encoding_stokes.load_state_dict(chk['encoder_stokes_dict'])
 
         self.stats = chk['stats']
         
@@ -127,11 +157,16 @@ class Training(object):
                 
     def test(self):
         
-        self.training_dataset = datasets.Dataset1D(self.config['training_set'], 
-                    pctx=[0,80], 
-                    pcty=[0,100], 
-                    stats=None, 
-                    step=5)                
+        # L: TEMPORARILY CHANGED TO MATCH INVERT_CLIP.PY 
+        #self.training_dataset = datasets.Dataset1D(self.config['training_set'], 
+        #            pctx=[0,80], 
+        #            pcty=[0,100], 
+        #            stats=None, 
+        #            step=5)      
+        self.training_dataset = dataset.Dataset('stokes_training.h5', 
+                                                   'models_training.h5', 
+                                                   'good_profiles_training.npy',
+                                                   noise=self.config['training']['noise'])          
         
         print("Adding noise to Stokes...")
         stokes_all = []
