@@ -21,7 +21,7 @@ training:
     batch_size: 16      # drastically lower for CPU
     gpu: 0           # forces CPU usage
     smooth: 0.05
-    n_epochs: 10        # short test run
+    n_epochs: 2        # short test run
     lr: 3.0e-4
     warmup: 2           # proportionally reduced
     weight_decay: 0.0
