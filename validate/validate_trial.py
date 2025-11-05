@@ -11,7 +11,7 @@ except:
     NVIDIA_SMI = False
 import matplotlib.pyplot as pl
 import matplotlib
-matplotlib.use('Agg') # test
+matplotlib.use('QtAgg') # test
 import sys
 sys.path.append('../modules')
 import resnet
@@ -247,6 +247,42 @@ class Testing(object):
             Number of random examples to visualize.
         """
 
+        # NORMALIZATION
+        #lower_stokesI, upper_stokesI = 0.0, 2.5
+        #lower_stokesQ, upper_stokesQ = -1e-2, 1e-2
+        #lower_stokesU, upper_stokesU = -1e-2, 1e-2
+        #lower_stokesV, upper_stokesV = -1e-2, 1e-2
+        #lower_T, upper_T = 2000, 25000
+        #lower_vmic, upper_vmic = 0.0, 3.0
+        #lower_v, upper_v = -10.0, 10.0
+        #lower_Bx, upper_Bx = 0.0, 1000.0
+        #lower_By, upper_By = -1000.0, 1000.0
+        #lower_Bz, upper_Bz = -1000.0, 1000.0
+
+        # --- Normalize Stokes ---
+        #I = stokes[:, 0, :]
+        #Q = stokes[:, 1, :] / I
+        #U = stokes[:, 2, :] / I
+        #V = stokes[:, 3, :] / I
+        #stokes_norm = np.stack([normalize_input(I, lower_stokesI, upper_stokesI),
+        #    normalize_input(Q, lower_stokesQ, upper_stokesQ),
+        #    normalize_input(U, lower_stokesU, upper_stokesU),
+        #    normalize_input(V, lower_stokesV, upper_stokesV)
+        #], axis=1)
+
+        # --- Normalize models ---
+        #models_norm = np.stack([
+        #    normalize_input(models[:, 0, :], lower_T, upper_T),
+        #    normalize_input(models[:, 1, :], lower_vmic, upper_vmic),
+        #    normalize_input(models[:, 2, :], lower_v, upper_v),
+        #    normalize_input(models[:, 3, :], lower_Bx, upper_Bx),
+        #    normalize_input(models[:, 4, :], lower_By, upper_By),
+        #    normalize_input(models[:, 5, :], lower_Bz, upper_Bz)
+        #], axis=1)
+
+        #decoded_stokes_norm = decoded_stokes
+        #decoded_models_norm = decoded_models
+
         n_total = stokes.shape[0]
         indices = random.sample(range(n_total), min(n_samples, n_total))
 
@@ -278,13 +314,12 @@ class Testing(object):
             ax.set_xlabel("Depth index")
             ax.set_ylabel("Value")
             ax.legend(fontsize=8, ncol=3)
-            ax.grid(alpha=0.3)
+            #ax.grid(alpha=0.3)
 
             pl.tight_layout(rect=[0, 0, 1, 0.96])
-            #pl.show()
+            pl.show()
             output_file = f"reconstruction_sample_{idx}.png"
-            pl.tight_layout(rect=[0, 0, 1, 0.96])
-            pl.savefig(output_file, dpi=150)
+            #pl.savefig(output_file, dpi=150)
             print(f"Saved {output_file}")
             pl.close()
 
