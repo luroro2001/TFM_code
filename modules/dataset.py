@@ -55,7 +55,7 @@ class Dataset(torch.utils.data.Dataset):
         self.model = self.model[ind, ...]
         self.stokes = self.stokes[ind, ...]
 
-        self.model = np.transpose(self.model, (0, 2, 1))
+        self.model = np.transpose(self.model, (0, 2, 1)) # L:transpose so that dimensions match
         
         # L: sets dataset length: either all available samples or a subset
         if n_training is None:
