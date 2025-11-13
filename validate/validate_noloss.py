@@ -10,8 +10,6 @@ try:
 except:
     NVIDIA_SMI = False
 import matplotlib.pyplot as pl
-#import matplotlib
-#matplotlib.use('Agg') # test, did not fix the issue
 import sys
 import os
 #sys.path.append('../modules')
