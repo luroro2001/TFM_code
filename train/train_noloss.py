@@ -309,7 +309,7 @@ class Training(nn.Module):
             tmp['gpu'] = f'{gpu_usage}'
             tmp['mem'] = f'{memory_usage}'
             tmp['lr'] = f'{current_lr:8.6f}'
-            tmp['scale'] = f'{F.softplus(self.logit_scale):8.6f}'
+            #tmp['scale'] = f'{F.softplus(self.logit_scale):8.6f}'
             #tmp['L_c'] = f'{loss_clip_avg:8.6f}'
             tmp['L_s'] = f'{loss_stokes_avg:8.6f}'
             tmp['L_m'] = f'{loss_models_avg:8.6f}'
