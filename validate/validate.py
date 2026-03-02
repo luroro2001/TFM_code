@@ -30,6 +30,7 @@ import random
 #import time
 #import pathlib
 from datetime import datetime
+from sklearn.manifold import TSNE
 
 def normalize_input(x, xmin, xmax):
     return 2.0 * (x - xmin) / (xmax - xmin) - 1.0
@@ -244,7 +245,7 @@ class Testing(object):
         for idx in indices:
             fig, axes = pl.subplots(2,1, figsize=(10,8))
             #fig.suptitle(f'Sample {idx}', fontsize=14, fontweight='bold')
-            fig.suptitle(f'Weights: w_clip=0, w_stokes=1, w_models=1')
+            fig.suptitle(f'Weights: w_clip=1, w_stokes=1, w_models=10')
 
             # plot the Stokes profiles
             ax = axes[0]
@@ -275,6 +276,41 @@ class Testing(object):
             pl.savefig(output_file, dpi=150)
             print(f"Saved {output_file}")
             pl.close()
+        
+    def plot_tsne(self, z_stokes, z_models, models, parameter_idx=0, depth_idx=40):
+        """
+        Project latent vectors to 2D with t-SNE and color by a physical parameter.
+        parameter_idx: 0=T, 1=vmic, 2=v, 3=Bx, 4=By, 5=Bz
+        depth_idx: which depth layer to use for coloring
+        """
+        param_names = ["T", "vmic", "v", "Bx", "By", "Bz"]
+        
+        # Combine both latent spaces and reduce together
+        z_all = np.concatenate([z_stokes, z_models], axis=0)
+        z_2d = TSNE(n_components=2, perplexity=30, random_state=42).fit_transform(z_all)
+        
+        n = len(z_stokes)
+        z_stokes_2d = z_2d[:n]
+        z_models_2d = z_2d[n:]
+        
+        # Color by chosen physical parameter at chosen depth
+        color_values = models[:, parameter_idx, depth_idx]
+        
+        fig, axes = pl.subplots(1, 2, figsize=(14, 6))
+        fig.suptitle(f"t-SNE latent space, colored by {param_names[parameter_idx]} at depth {depth_idx}")
+        
+        for ax, z_2d_half, title in zip(axes, [z_stokes_2d, z_models_2d], ["Stokes encoder", "Models encoder"]):
+            sc = ax.scatter(z_2d_half[:, 0], z_2d_half[:, 1], c=color_values, cmap='RdBu_r', s=2, alpha=0.7)
+            pl.colorbar(sc, ax=ax, label=param_names[parameter_idx])
+            ax.set_title(title)
+            ax.set_xlabel("t-SNE 1")
+            ax.set_ylabel("t-SNE 2")
+        
+        pl.tight_layout()
+        output_file = os.path.join(self.output_dir, f"tsne_{param_names[parameter_idx]}.pdf")
+        pl.savefig(output_file, dpi=150)
+        print(f"Saved {output_file}")
+        pl.close()
 
 
 if (__name__ == '__main__'):
@@ -282,8 +318,12 @@ if (__name__ == '__main__'):
     files = glob.glob('../train/weights/*.pth')
     files.sort()
     checkpoint = files[-1]
+    #checkpoint = '../train/weights/2025-11-21-14_52_56_clip.pth'
     
     deepnet = Testing(checkpoint, gpu=0, batch_size=1024)
     z_stokes, z_models, models, stokes, decoded_models, decoded_stokes = deepnet.test()
 
     deepnet.plot_reconstruction(stokes, decoded_stokes, models, decoded_models, n_samples=3)
+
+    for param_idx in range(6):  # loop over T, vmic, v, Bx, By, Bz
+        deepnet.plot_tsne(z_stokes, z_models, models, parameter_idx=param_idx, depth_idx=40)
