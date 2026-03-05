@@ -246,7 +246,7 @@ class Testing(object):
         for idx in indices:
             fig, axes = pl.subplots(2,1, figsize=(10,8))
             #fig.suptitle(f'Sample {idx}', fontsize=14, fontweight='bold')
-            fig.suptitle(f'Weights: w_clip=1, w_stokes=1, w_models=10')
+            fig.suptitle(f'Weights: w_clip=2, w_stokes=1, w_models=2')
 
             # plot the Stokes profiles
             ax = axes[0]
@@ -273,7 +273,7 @@ class Testing(object):
             pl.tight_layout(rect=[0, 0, 1, 0.96])
             #pl.show()
             #output_file = f"reconstruction_sample_{idx}.pdf"
-            output_file = os.path.join(self.output_dir, f"sample_{idx}.pdf")
+            output_file = os.path.join(self.output_dir, f"reconstruction_{idx}.pdf")
             pl.savefig(output_file, dpi=150)
             print(f"Saved {output_file}")
             pl.close()
@@ -344,10 +344,6 @@ class Testing(object):
 
         # ------------------------------------
         # 2) Optional PCA
-        # According to scikit-learn site:
-        # "It is highly recommended to use another dimensionality reduction method (e.g. PCA for dense data or TruncatedSVD for sparse data)
-        # to reduce the number of dimensions to a reasonable amount (e.g. 50) if the number of features is very high. 
-        # This will suppress some noise and speed up the computation of pairwise distances between samples. "
         # ------------------------------------
         if use_pca:
             if z_stokes.shape[1] > 50:
@@ -526,13 +522,71 @@ class Testing(object):
         print(f"Saved {filename}")
         pl.close()
 
+    def plot_tsne(self, z_stokes, z_models, models, param="T", height_idx=40, use_pca=True, perplexity=30):
+
+        param_dict = {"T": 0, "vmic": 1, "v": 2, "Bx": 3, "By": 4, "Bz": 5}
+        p_index = param_dict[param]
+        values = models[:, p_index, height_idx]
+
+        # PCA pre-reduction (as suggested in scikit-learn's page)
+        if use_pca:
+            if z_stokes.shape[1] > 50:
+                print("Applying PCA → 50 dims (Stokes)")
+                z_stokes = PCA(n_components=50).fit_transform(z_stokes)
+            if z_models.shape[1] > 50:
+                print("Applying PCA → 50 dims (Models)")
+                z_models = PCA(n_components=50).fit_transform(z_models)
+
+        tsne = TSNE(n_components=2, perplexity=perplexity, init="pca", learning_rate="auto", random_state=42)
+
+        print("Computing t-SNE for Stokes encoder...")
+        z_stokes_2d = tsne.fit_transform(z_stokes)
+        print("Computing t-SNE for Models encoder...")
+        z_models_2d = tsne.fit_transform(z_models)
+        print("Computing joint t-SNE...")
+        z_all = np.concatenate([z_stokes, z_models], axis=0)
+        z_all_2d = tsne.fit_transform(z_all)
+        N = len(z_stokes)
+        z_stokes_joint_2d = z_all_2d[:N]
+        z_models_joint_2d = z_all_2d[N:]
+
+        fig, axes = pl.subplots(1, 3, figsize=(21, 6))
+        #fig.suptitle(f"t-SNE latent space — {param} at depth {height_idx} | "
+        #            f"w_clip={self.weight_clip}, w_stokes={self.weight_stokes}, w_models={self.weight_models}")
+        fig.suptitle(f"t-SNE latent space ({param} at depth {height_idx}) — "
+                    f"w_clip=2, w_stokes=1, w_models=2")
+
+        # Separate plots
+        for ax, z_2d, title in zip(axes[:2], [z_stokes_2d, z_models_2d], ["Stokes encoder", "Models encoder"]):
+            sc = ax.scatter(z_2d[:, 0], z_2d[:, 1], c=values, marker='+', cmap="viridis", s=8, alpha=0.8, linewidths=0.5)
+            fig.colorbar(sc, ax=ax, label=param)
+            ax.set_title(title)
+            #ax.set_xlabel("t-SNE 1")
+            #ax.set_ylabel("t-SNE 2")
+
+        # Joint plot
+        sc = axes[2].scatter(z_stokes_joint_2d[:, 0], z_stokes_joint_2d[:, 1],
+                            c=values, cmap="magma", s=8, alpha=0.8, marker="o", facecolors="none", linewidths=0.5, label="Stokes")
+        axes[2].scatter(z_models_joint_2d[:, 0], z_models_joint_2d[:, 1],
+                        c=values, cmap="magma", s=8, alpha=0.8, marker="+", linewidths=0.5, label="Models")
+        fig.colorbar(sc, ax=axes[2], label=param)
+        axes[2].set_title("Joint")
+        #axes[2].set_xlabel("t-SNE 1")
+        #axes[2].set_ylabel("t-SNE 2")
+        axes[2].legend()
+
+        pl.tight_layout()
+        filename = os.path.join(self.output_dir, f"tsne_{param}_h{height_idx}.pdf")
+        pl.savefig(filename, dpi=150)
+        print(f"Saved {filename}")
+        pl.close()
+
 if (__name__ == '__main__'):
 
     files = glob.glob('../train/weights/*.pth')
     files.sort()
     #checkpoint = files[-1]
-    checkpoint = '../train/weights/2025-11-21-14_52_56_clip.pth'
-    #checkpoint = '../train/weights/2025-11-20-15_22_58_clip.pth'
+    checkpoint = '../train/weights/2025-11-24-10_44_18_clip.pth'
 
     deepnet = Testing(checkpoint, gpu=0, batch_size=1024)
     z_stokes, z_models, models, stokes, decoded_models, decoded_stokes = deepnet.test()
@@ -542,9 +596,9 @@ if (__name__ == '__main__'):
     #for param_idx in range(6):  # loop over T, vmic, v, Bx, By, Bz
     #    deepnet.plot_tsne_1(z_stokes, z_models, models, parameter_idx=param_idx, depth_idx=40)
 
-    deepnet.plot_tsne_joint(z_stokes, z_models, models, param="T", height_idx=40)
-    deepnet.plot_tsne_joint(z_stokes, z_models, models, param="vmic", height_idx=40)
-    deepnet.plot_tsne_joint(z_stokes, z_models, models, param="v", height_idx=40)
-    deepnet.plot_tsne_joint(z_stokes, z_models, models, param="Bx", height_idx=40)
-    deepnet.plot_tsne_joint(z_stokes, z_models, models, param="By", height_idx=40)
-    deepnet.plot_tsne_joint(z_stokes, z_models, models, param="Bz", height_idx=40)
+    deepnet.plot_tsne(z_stokes, z_models, models, param="T", height_idx=40)
+    deepnet.plot_tsne(z_stokes, z_models, models, param="vmic", height_idx=40)
+    deepnet.plot_tsne(z_stokes, z_models, models, param="v", height_idx=40)
+    deepnet.plot_tsne(z_stokes, z_models, models, param="Bx", height_idx=40)
+    deepnet.plot_tsne(z_stokes, z_models, models, param="By", height_idx=40)
+    deepnet.plot_tsne(z_stokes, z_models, models, param="Bz", height_idx=40)
