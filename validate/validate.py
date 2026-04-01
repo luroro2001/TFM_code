@@ -481,11 +481,6 @@ class Testing(object):
         2) Residual distributions: histogram of residuals for each Stokes component.
         3) RMS summary bar chart: mean RMS per Stokes component across the test set.
 
-        If ball data is available, an additional figure is produced:
-        4) Ball std profiles: the mean standard deviation across the ball ensemble
-            as a function of wavelength, averaged over all test samples, showing which
-            parts of the spectrum are most sensitive to latent space uncertainty.
-
         Parameters:
         - stokes_all: np.ndarray (N, 4, 112) ; ground-truth normalized Stokes profiles
         - synthesis_results: dict returned by fast_stokes_synthesis()
@@ -611,37 +606,6 @@ class Testing(object):
         print(f"Saved {out}")
         pl.close()
 
-        # ------------------------------------------------------------------
-        # Figure 4 (only if ball data is available): mean ball std per wavelength
-        # Shows which parts of the spectrum are most sensitive to small movements
-        # in latent space, averaged over all test samples. A large std at a given
-        # wavelength means the synthesized profile is locally ambiguous there.
-        # ------------------------------------------------------------------
-        #if has_ball:
-            # Average the ball std over all N test samples: (N, 4, 112) -> (4, 112)
-        #    mean_ball_std = ball_std.mean(axis=0)
-
-        #    fig, axes = pl.subplots(2, 2, figsize=(12, 8))
-        #    fig.suptitle(f"Ball experiment: mean std over latent perturbations\n"
-        #                f"(n_ball={n_ball}, averaged over {N} test profiles)\n"
-        #                f"(Fast synthesis: model → z → decoder_stokes)")
-        #    axes = axes.flatten()
-
-        #    for s, label in enumerate(stokes_labels):
-        #        ax = axes[s]
-        #        ax.plot(mean_ball_std[s], color='steelblue', linewidth=1.5)
-        #        ax.fill_between(range(112), 0, mean_ball_std[s],
-        #                        color='steelblue', alpha=0.3)
-        #        ax.set_title(f"Stokes {label}")
-        #        ax.set_xlabel("Wavelength index")
-        #        ax.set_ylabel("Mean ball std (normalized units)")
-        #        ax.set_ylim(bottom=0)
-
-        #    pl.tight_layout(rect=[0, 0, 1, 0.93])
-        #    out = os.path.join(self.output_dir, "synthesis_ball_std.pdf")
-        #    pl.savefig(out, dpi=150)
-        #    print(f"Saved {out}")
-        #    pl.close()
 
 
     def fast_stokes_inversion(self, stokes_all, models_all, n_ball=100, ball_sigma=0.02):
@@ -769,11 +733,6 @@ class Testing(object):
         2) Residual distributions: histogram of residuals for each model component.
         3) RMS summary bar chart: mean RMS per model component across the test set.
 
-        If ball data is available, an additional figure is produced:
-        4) Ball std profiles: the mean standard deviation across the ball ensemble
-            as a function of depth, averaged over all test samples, showing which
-            depth layers are most sensitive to latent space uncertainty.
-
         Parameters:
         - models_all: (N, 6, 80) ; ground-truth normalized model parameters
         - inversion_results: dict returned by fast_stokes_inversion()
@@ -897,40 +856,6 @@ class Testing(object):
         pl.savefig(out, dpi=150)
         print(f"Saved {out}")
         pl.close()
-
-        # ------------------------------------------------------------------
-        # Figure 4 (only if ball data is available): mean ball std per depth layer
-        # Shows which atmospheric depth layers are most sensitive to small movements
-        # in latent space, averaged over all test samples. A large std at a given
-        # depth means the inversion is locally ambiguous there — the network cannot
-        # confidently determine the physical value at that layer from the Stokes input.
-        # ------------------------------------------------------------------
-        #if has_ball:
-            # Average the ball std over all N test samples: (N, 6, 80) -> (6, 80)
-        #    mean_ball_std = ball_std.mean(axis=0)
-
-        #    fig, axes = pl.subplots(2, 3, figsize=(14, 8))
-        #    fig.suptitle(f"Ball experiment: mean std over latent perturbations\n"
-        #                f"(n_ball={n_ball}, σ={ball_sigma}, averaged over {N} test profiles)\n"
-        #                f"(Fast inversion: Stokes → z → decoder_models)")
-        #    axes = axes.flatten()
-
-        #    for m, (label, color) in enumerate(zip(model_labels, colors)):
-        #        ax = axes[m]
-        #        ax.plot(mean_ball_std[m], color=color, linewidth=1.5)
-        #        ax.fill_between(range(80), 0, mean_ball_std[m],
-        #                        color=color, alpha=0.3)
-        #        ax.set_title(f"{label}")
-        #        ax.set_xlabel("Depth index")
-        #        ax.set_ylabel("Mean ball std (normalized units)")
-        #        ax.set_ylim(bottom=0)
-
-        #    pl.tight_layout(rect=[0, 0, 1, 0.93])
-        #    out = os.path.join(self.output_dir, "inversion_ball_std.pdf")
-        #    pl.savefig(out, dpi=150)
-        #    print(f"Saved {out}")
-        #    pl.close()
-
 
 if (__name__ == '__main__'):
 
