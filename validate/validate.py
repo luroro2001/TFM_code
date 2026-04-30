@@ -31,6 +31,7 @@ import random
 from datetime import datetime
 from sklearn.manifold import TSNE
 from sklearn.decomposition import PCA
+import h5py 
 
 def normalize_input(x, xmin, xmax):
     return 2.0 * (x - xmin) / (xmax - xmin) - 1.0
@@ -145,6 +146,25 @@ class Testing(object):
             #L: also put decoders in evaluation mode for plot_reconstruction
             self.decoder_models.eval()
             self.decoder_stokes.eval()
+
+        # L: ADDED THIS TO "FIX" THE UNITS IN GRAPHS
+
+        # Denormalization bounds for model parameters (one per component)
+        self.model_lower = [2000., 0.0, -10.0, 0.0, -1000.0, -1000.0]
+        self.model_upper = [25000., 3.0, 10.0, 1000.0, 1000.0, 1000.0]
+        self.model_units = ["K", "km/s", "km/s", "G", "G", "G"]
+
+        # logtau axis: linearly spaced from 1.5 to -7.5, 80 points
+        self.logtau = np.linspace(1.5, -7.5, 80)
+
+        # Depth cutoff: only use depths where logtau >= logtau_cutoff
+        self.logtau_cutoff = -4  
+        self.depth_cutoff = int(np.searchsorted(-self.logtau, -self.logtau_cutoff))
+        # searchsorted on negated arrays because logtau is decreasing
+
+        with h5py.File('../database/stokes_testing.h5', 'r') as f:
+            self.wavelength = f['spec1']['wavelength'][:]
+
         
     def denormalize(self, models):
         lower = [2000., 0.0, -10.0, 0.0, -1000.0, -1000.0]
@@ -472,7 +492,7 @@ class Testing(object):
         }
 
 
-    def plot_fast_synthesis_results(self, stokes_all, synthesis_results, n_samples=3):
+    def plot_fast_synthesis_results(self, stokes_all, synthesis_results, n_samples=3, indices=None):
         """
         Produces plots for the fast Stokes synthesis.
 
@@ -498,7 +518,7 @@ class Testing(object):
         has_ball = ball_profiles is not None
         n_ball   = ball_profiles.shape[1] if has_ball else 0
 
-        stokes_labels = ["I", "Q", "U", "V"]
+        stokes_labels = [r"I/I$_c$", r"Q/I$_c$", r"U/I$_c$", r"V/I$_c$"]
         N = stokes_all.shape[0]
 
         # we use or create the same output directory as all other plotting functions
@@ -509,7 +529,8 @@ class Testing(object):
             print(f"Saving synthesis plots to folder: {self.output_dir}")
 
         # randomly choose which ones to visualize
-        indices = random.sample(range(N), min(n_samples, N))
+        if indices is None:
+            indices = random.sample(range(N), min(n_samples, N))
 
         # ------------------------------------------------------------------
         # Figure 1: Profile comparisons (ground truth vs synthesized, + ball)
@@ -520,7 +541,7 @@ class Testing(object):
         for idx in indices:
             fig, axes = pl.subplots(2, 2, figsize=(12, 8))
             #fig.suptitle(f"Fast Stokes Synthesis — Sample {idx}"))
-            fig.suptitle("Fast Stokes Synthesis")
+            #fig.suptitle("Fast Stokes Synthesis")
             axes = axes.flatten()
 
             for s, label in enumerate(stokes_labels):
@@ -529,26 +550,26 @@ class Testing(object):
                 if has_ball:
                     # draw all individual ball samples as faint lines to show full spread
                     for b in range(n_ball):
-                        ax.plot(ball_profiles[idx, b, s], color='lightblue', alpha=0.15, linewidth=0.4)
+                        ax.plot(self.wavelength, ball_profiles[idx, b, s], color='lightblue', alpha=0.15, linewidth=0.4)
 
                     # Draw shaded ±1sigma band around the ball mean
                     ax.fill_between(
-                        range(112),
+                        self.wavelength,
                         ball_mean[idx, s] - ball_std[idx, s],
                         ball_mean[idx, s] + ball_std[idx, s],
                         color='steelblue', alpha=0.35, label='Ball ±1σ'
                     )
 
                     # draw ball mean
-                    ax.plot(ball_mean[idx, s], color='steelblue', linewidth=1.2, linestyle='--', label='Ball mean')
+                    ax.plot(self.wavelength, ball_mean[idx, s], color='steelblue', linewidth=1.2, linestyle='--', label='Ball mean')
 
                 # central prediction (from unperturbed z) and ground truth on top
-                ax.plot(synthesized_stokes[idx, s], color='red',   linewidth=1.5, linestyle='--', label='Synthesized')
-                ax.plot(stokes_all[idx, s], color='black', linewidth=1.5, label='Ground truth')
+                ax.plot(self.wavelength,synthesized_stokes[idx, s], color='red',   linewidth=1.5, linestyle='--', label='Synthesized')
+                ax.plot(self.wavelength, stokes_all[idx, s], color='black', linewidth=1.5, label='Ground truth')
 
                 ax.set_title(f"Stokes {label}  (RMS={rms_per_profile[idx, s]:.4f})")
-                ax.set_xlabel("Wavelength index")
-                ax.set_ylabel("Normalized value")
+                ax.set_xlabel("Wavelength (Å)")
+                ax.set_ylabel(stokes_labels[s])
                 ax.legend(fontsize=8)
 
             pl.tight_layout(rect=[0, 0, 1, 0.95])
@@ -618,16 +639,15 @@ class Testing(object):
         - n_ball: number of perturbed z samples per profile. Set to 0 to skip.
         - ball_sigma: standard dev. of the Gaussian perturbation applied to z.
 
-        Returns:
-            dict with:
-                'inverted_models': (N, 6, 80) ;  predicted physical parameters
-                'residuals': (N, 6, 80) ; residuals (pred - true)
-                'rms_per_profile': (N, 6) ; RMS per model component per sample
-                'rms_per_component': (6,) ;  mean RMS across all samples
-                'ball_profiles': (N, n_ball, 6, 80) or None
-                'ball_mean': (N, 6, 80) or None ; mean over ball samples
-                'ball_std': (N, 6, 80) or None ; std over ball samples
-                'ball_sigma': float ;sigma used (stored for plot titles)
+        Returns a dictionary with:
+        - 'inverted_models': (N, 6, 80) ;  predicted physical parameters
+        - 'residuals': (N, 6, 80) ; residuals (pred - true)
+        - 'rms_per_profile': (N, 6) ; RMS per model component per sample
+        - 'rms_per_component': (6,) ;  mean RMS across all samples
+        - 'ball_profiles': (N, n_ball, 6, 80) or None
+        - 'ball_mean': (N, 6, 80) or None ; mean over ball samples
+        - 'ball_std': (N, 6, 80) or None ; std over ball samples
+        - 'ball_sigma': float ; sigma used (stored for plot titles)
         """
 
         if not self.decoders:
@@ -694,7 +714,8 @@ class Testing(object):
 
         # residuals and RMS
         residuals = inverted_models - models_all # (N, 6, 80)
-        rms_per_profile = np.sqrt(np.mean(residuals**2, axis=2)) # (N, 6)
+        dc=self.depth_cutoff
+        rms_per_profile = np.sqrt(np.mean(residuals[:, :, :dc]**2, axis=2))  # (N, 6)
         rms_per_component = np.mean(rms_per_profile, axis=0)  # (6,)
 
         model_labels = ["T", "vmic", "v", "Bx", "By", "Bz"]
@@ -724,12 +745,12 @@ class Testing(object):
         }
 
 
-    def plot_fast_inversion_results(self, models_all, inversion_results, n_samples=3):
+    def plot_fast_inversion_results(self, models_all, inversion_results, n_samples=3, indices=None):
         """
         Produces plots for the fast Stokes inversion.
 
         Generates the following figures:
-        1) Profile comparisons: ground-truth vs synthesized Stokes for n_samples random profiles.
+        1) Profile comparisons: ground-truth vs inverted model parameters for n_samples random profiles.
         2) Residual distributions: histogram of residuals for each model component.
         3) RMS summary bar chart: mean RMS per model component across the test set.
 
@@ -739,14 +760,14 @@ class Testing(object):
         - n_samples: number of random profiles to plot in the comparison figure
         """
 
-        inverted_models   = inversion_results['inverted_models']
-        residuals         = inversion_results['residuals']
-        rms_per_profile   = inversion_results['rms_per_profile']
+        inverted_models = inversion_results['inverted_models']
+        residuals = inversion_results['residuals']
+        rms_per_profile = inversion_results['rms_per_profile']
         rms_per_component = inversion_results['rms_per_component']
-        ball_profiles     = inversion_results['ball_profiles']   # (N, n_ball, 6, 80) or None
-        ball_mean         = inversion_results['ball_mean']  # (N, 6, 80) or None
-        ball_std          = inversion_results['ball_std']  # (N, 6, 80) or None
-        ball_sigma        = inversion_results['ball_sigma']
+        ball_profiles = inversion_results['ball_profiles']
+        ball_mean = inversion_results['ball_mean']
+        ball_std  = inversion_results['ball_std']
+        ball_sigma = inversion_results['ball_sigma']
 
         has_ball = ball_profiles is not None
         n_ball   = ball_profiles.shape[1] if has_ball else 0
@@ -755,54 +776,59 @@ class Testing(object):
         colors = ['steelblue', 'coral', 'mediumseagreen', 'orchid', 'goldenrod', 'tomato']
         N = models_all.shape[0]
 
-        # we use or create the same output directory as all other plotting functions
+        # mask for reliable depth range: logtau >= logtau_cutoff
+        depth_mask = self.logtau >= self.logtau_cutoff  # boolean array, shape (80,)
+        logtau_plot = self.logtau[depth_mask]           # x-axis values for plots
+
         if not hasattr(self, 'output_dir'):
             timestamp = datetime.now().strftime("%Y-%m-%d_%H%M%S")
             self.output_dir = os.path.join(os.path.dirname(__file__), f"{timestamp}")
             os.makedirs(self.output_dir, exist_ok=True)
             print(f"Saving inversion plots to folder: {self.output_dir}")
 
-        # randomly choose which ones to visualize
-        indices = random.sample(range(N), min(n_samples, N))
+        if indices is None:
+            indices = random.sample(range(N), min(n_samples, N))
 
         # ------------------------------------------------------------------
-        # Figure 1: Profile comparisons (ground truth vs inverted, + ball)
-        # One figure per random sample, 2x3 grid (one subplot per model component).
-        # The ball ensemble is drawn first as faint lines and a shaded ±1σ band
-        # so the central prediction and ground truth sit clearly on top.
+        # Figure 1: Profile comparisons 
         # ------------------------------------------------------------------
         for idx in indices:
             fig, axes = pl.subplots(2, 3, figsize=(14, 8))
-            fig.suptitle("Fast Stokes Inversion")
+            #fig.suptitle("Fast Stokes Inversion")
             axes = axes.flatten()
 
             for m, label in enumerate(model_labels):
                 ax = axes[m]
+                lo, hi = self.model_lower[m], self.model_upper[m]
+
+                # denormalize and slice to reliable depth range
+                gt   = denormalize_output(models_all[idx, m][depth_mask],      lo, hi)
+                pred = denormalize_output(inverted_models[idx, m][depth_mask],  lo, hi)
 
                 if has_ball:
-                    # draw all individual ball samples as faint lines to show full spread
                     for b in range(n_ball):
-                        ax.plot(ball_profiles[idx, b, m], color='lightblue', alpha=0.15, linewidth=0.4)
+                        bp = denormalize_output(ball_profiles[idx, b, m][depth_mask], lo, hi)
+                        ax.plot(logtau_plot, bp, color='lightblue', alpha=0.15, linewidth=0.4)
 
-                    # Draw shaded ±1σ band around the ball mean
-                    ax.fill_between(
-                        range(80),
-                        ball_mean[idx, m] - ball_std[idx, m],
-                        ball_mean[idx, m] + ball_std[idx, m],
-                        color='steelblue', alpha=0.35, label='Ball ±1σ'
-                    )
+                    bm = denormalize_output(ball_mean[idx, m][depth_mask], lo, hi)
+                    bs = ball_std[idx, m][depth_mask] * 0.5 * (hi - lo)
+                    ax.fill_between(logtau_plot, bm - bs, bm + bs,
+                                    color='steelblue', alpha=0.35, label='Ball ±1σ')
+                    ax.plot(logtau_plot, bm, color='steelblue', linewidth=1.2,
+                            linestyle='--', label='Ball mean')
 
-                    # Draw ball mean
-                    ax.plot(ball_mean[idx, m], color='steelblue', linewidth=1.2, linestyle='--', label='Ball mean')
+                ax.plot(logtau_plot, pred, color='red',   linewidth=1.5, linestyle='--', label='Inverted')
+                ax.plot(logtau_plot, gt,   color='black', linewidth=1.5, label='Ground truth')
 
-                # central prediction (from unperturbed z) and ground truth on top
-                ax.plot(inverted_models[idx, m], color='red',   linewidth=1.5, linestyle='--', label='Inverted')
-                ax.plot(models_all[idx, m], color='black', linewidth=1.5, label='Ground truth')
-
+                ax.set_xlabel("log τ")
+                ax.set_ylabel(f"{label} [{self.model_units[m]}]")
                 ax.set_title(f"{label}  (RMS={rms_per_profile[idx, m]:.4f})")
-                ax.set_xlabel("Depth index")
-                ax.set_ylabel("Normalized value")
+                ax.invert_xaxis()
                 ax.legend(fontsize=8)
+
+                # fix y-axis range for temperature
+                if label == "T":
+                    ax.set_ylim(2000, 10000)
 
             pl.tight_layout(rect=[0, 0, 1, 0.95])
             out = os.path.join(self.output_dir, f"inversion_profiles_{idx}.pdf")
@@ -811,23 +837,29 @@ class Testing(object):
             pl.close()
 
         # ------------------------------------------------------------------
-        # Figure 2: Residual distributions (one subplot per model component)
-        # These histograms show whether errors are centred at zero (no bias) and
-        # how heavy the tails are (frequency of large errors per parameter)
+        # Figure 2: Residual distributions 
         # ------------------------------------------------------------------
         fig, axes = pl.subplots(2, 3, figsize=(14, 8))
         axes = axes.flatten()
 
         for m, label in enumerate(model_labels):
             ax = axes[m]
-            res_flat = residuals[:, m, :].flatten()
+            lo, hi = self.model_lower[m], self.model_upper[m]
+            # residuals in normalized space, sliced to the reliable depths, then converted to physical units
+            res_phys = denormalize_output(
+                inverted_models[:, m, :][:, depth_mask], lo, hi
+            ) - denormalize_output(
+                models_all[:, m, :][:, depth_mask], lo, hi
+            )
+            res_flat = res_phys.flatten()
+
             ax.hist(res_flat, bins=80, color='steelblue', edgecolor='none', density=True)
             ax.axvline(0, color='black', linestyle='--', linewidth=1.0)
             ax.set_title(f"{label}")
-            ax.set_xlabel("Residual")
+            ax.set_xlabel(f"Residual [{self.model_units[m]}]")
             ax.set_ylabel("Density")
             ax.text(0.97, 0.95,
-                    f"μ={res_flat.mean():.4f}\nσ={res_flat.std():.4f}",
+                    f"μ={res_flat.mean():.2f}\nσ={res_flat.std():.2f}",
                     transform=ax.transAxes, ha='right', va='top', fontsize=8,
                     bbox=dict(boxstyle='round,pad=0.3', facecolor='white', alpha=0.7))
 
@@ -838,15 +870,13 @@ class Testing(object):
         pl.close()
 
         # ------------------------------------------------------------------
-        # Figure 3: RMS summary bar chart
-        # One bar per model component — allows immediate comparison of which
-        # physical parameters are recovered well and which are more uncertain
+        # Figure 3: RMS summary bar chart in normalized units
         # ------------------------------------------------------------------
         fig, ax = pl.subplots(figsize=(8, 4))
         bars = ax.bar(model_labels, rms_per_component, color=colors)
 
         for bar, val in zip(bars, rms_per_component):
-            ax.text(bar.get_x() + bar.get_width() / 2.0, bar.get_height() + 0.0002,
+            ax.text(bar.get_x() + bar.get_width() / 2.0, bar.get_height() * 1.01,
                     f"{val:.5f}", ha='center', va='bottom', fontsize=9)
 
         ax.set_xlabel("Model parameter")
@@ -857,12 +887,44 @@ class Testing(object):
         print(f"Saved {out}")
         pl.close()
 
+
+# L: just checking. REMOVE LATER
+#with h5py.File('../database/models_testing.h5', 'r') as f:
+#    logtau = f['model'][0, :, 0]  # first sample, all depths, logtau column
+#    print(logtau)
+
+#with h5py.File('../database/stokes_testing.h5', 'r') as f:
+#    print(f.keys())
+#    print(f['spec1'].keys())  # or whatever the top-level group is
+
+#with h5py.File('../database/stokes_testing.h5', 'r') as f:
+#    print(f['spec1']['stokes'].shape)
+#print(np.linspace(1.5, -7.5, 80))
+
+#with h5py.File('../database/stokes_testing.h5', 'r') as f:
+#    wav = f['spec1']['wavelength'][:] # The wavelength is in Ångströms, centered around the Fe I 6302 Å line
+#    print(wav.shape)
+#    print(wav)
+
+f_stokes = h5py.File('../database/stokes_training.h5', 'r')
+f_model  = h5py.File('../database/models_training.h5', 'r')
+ind      = np.load('../database/good_profiles_training.npy')
+
+print("Stokes dataset shape (raw):", f_stokes['spec1']['stokes'].shape)
+print("Model dataset shape (raw):", f_model['model'].shape)
+print("Good profiles index length (training):", len(ind))
+
+ind_val  = np.load('../database/good_profiles_validation.npy')
+ind_test = np.load('../database/good_profiles_testing.npy')
+print("Good profiles index length (validation):", len(ind_val))
+print("Good profiles index length (test):", len(ind_test))
+
 if (__name__ == '__main__'):
 
     files = glob.glob('../train/weights/*.pth')
     files.sort()
     #checkpoint = files[-1]
-    checkpoint = '../train/weights/2026-03-26-20_21_50_clip.pth' # (w_clip=2, w_stokes=1, w_models=2)
+    checkpoint = '../train/weights/2026-03-26-20_21_50_clip.pth' # (w_clip=2, w_stokes=1, w_models=2), noise=1e-3
     #checkpoint = '../train/weights/2025-11-15-12_27_43_clip.pth' # (w_clip=2, w_stokes=1, w_models=1)
 
     deepnet = Testing(checkpoint, gpu=0, batch_size=1024)
@@ -871,13 +933,15 @@ if (__name__ == '__main__'):
     # Autoencoder
     deepnet.plot_reconstruction(stokes, decoded_stokes, models, decoded_models, n_samples=3)
 
+    #fixed_indices = [716, 810, 1610, 4906, 892, 521, 3633]
+    fixed_indices = [3858, 2634, 3693, 4421, 3636]
     # Fast Stokes synthesis
-    synthesis_results = deepnet.fast_stokes_synthesis(models, stokes, n_ball=100, ball_sigma=0.1)    
-    deepnet.plot_fast_synthesis_results(stokes, synthesis_results, n_samples=3)
+    synthesis_results = deepnet.fast_stokes_synthesis(models, stokes, n_ball=100, ball_sigma=0.02)    
+    deepnet.plot_fast_synthesis_results(stokes, synthesis_results, n_samples=3, indices=fixed_indices)
 
     # Fast Stokes inversion
-    inversion_results = deepnet.fast_stokes_inversion(stokes, models, n_ball=100, ball_sigma=0.1)
-    deepnet.plot_fast_inversion_results(models, inversion_results, n_samples=3)
+    inversion_results = deepnet.fast_stokes_inversion(stokes, models, n_ball=100, ball_sigma=0.02)
+    deepnet.plot_fast_inversion_results(models, inversion_results, n_samples=3, indices=fixed_indices)
 
     # t-SNE representation of latent space
     #deepnet.plot_tsne_joint(z_stokes, z_models, models, param="T", height_idx=40, use_pca=False)
