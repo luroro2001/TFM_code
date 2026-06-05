@@ -1,9 +1,24 @@
-# Project structure
+# Foundation Model for Solar Spectropolarimetry
+
+This master's thesis (TFM) presents the development and evaluation of a foundational model for solar spectropolarimetry employing contrastive training. The model consists of two residual network encoders, one for Stokes profiles and one for physical atmospheric models, trained together to project both modalities into a shared latent space using a CLIP style contrastive loss, as well as reconstruction losses from the two corresponding decoders. The training database consists of synthetic profiles of the Fe I doublet at 630.15 and 630.25 nm, computed from perturbations of semi-empirical solar atmospheric models, covering a wide range of physical conditions that are representative of different solar regions.
+
+[FIGURE 5]
+
+---
+
+## Table of contents
+
+- [Project Structure](#project-structure)
+- [How Does It Work?](#how-does-it-work)
+- [Downstream Tasks](#downstream-tasks)
+- [Requirements](#requirements)
+
+## Project structure
 
 ```
 TFM/code/
 │ 
-├── database 
+├── database # NOT INCLUDED IN THIS REPOSITORY
 │   ├── good_profiles_testing.npy
 │   ├── good_profiles_training.npy
 │   ├── good_profiles_validation.npy
@@ -15,25 +30,25 @@ TFM/code/
 │   └── stokes_validation.h5
 │ 
 ├── modules 
-│   ├── dataset.py
-│   ├── encoder_decoder.py
-│   ├── encoding.py
-│   ├── mlp.py
-│   ├── normalize.py
-│   ├── resnet.py
-│   ├── siren.py
-│   └── symlog.py
+│   ├── dataset.py # to load the data
+│   ├── encoder_decoder.py # currently unused
+│   ├── encoding.py # currently unused
+│   ├── mlp.py # currently unused
+│   ├── normalize.py # normalization and denormalization fucntions
+│   ├── resnet.py # defines the residual networks
+│   ├── siren.py # currently unused
+│   └── symlog.py # symmetric logarithm transform
 │   
 ├── train 
-│   ├── weights
-│   ├── train_clip.py
-│   └── train_vicreg.py
+│   ├── weights/ # saved model checkpoints. NOT INCLUDED/UPDATED HERE
+│   ├── train_clip.py # CLIP style contrastive training
+│   └── train_vicreg.py # VICReg style training. 
 │ 
 ├── validate
-│   ├── validate.py
+│   ├── validate.py #validation script
 │   └── validate_trial.py
 │ 
-├── validate_old
+├── validate_old # old scripts, UNUSED
 │   ├── deconvolution_hinode.py
 │   ├── doplots_clip.py
 │   ├── invert_clip.py
@@ -47,91 +62,38 @@ TFM/code/
 │
 └── README.md
 ```
+---
 
-In the following sections, each script that makes up the code will be explained.
+## How does it work?
 
-# **`database`**
+EXPLAIN EVERYTHING HERE, TAKE FROM TFM.
 
-**PENDING**: add explanation of what each file is.
+---
 
-# **`modules directory`**
+## Downstream tasks
 
-## **`dataset.py`**
+The model currently allows the execution of two downstream applications:
 
-Starts off by defining two helper functions to normalize and denormalize data. 
+### Fast Stokes inversion
 
-**normalize_input** scales input data $x$ from the range $[xmin, xmax]$ to $[-1, 1]$. This is because neural networks work better when the inputs are normalized. The formula is simply:
+The fast Stokes inverter implements the cross-modal path that is illustrated in the figure below. Given a Stokes profiles as input, the Stokes encoder projects it into the shared latent space, producing a latent vector $\textbf{z}_s \in \mathbb{R}^{64}$. This vector is then decoded by the model decoder to produce an estimation of the atmospheric stratification for each of the six physical parameters $T, v, v_{\rm mic}, B_x, B_y,$ and $B_z$. The main advantage of the approach is that it avoids the iterative nature of classical inversion codes; once the model is trained, the inversion of a profile only requires two passes through two neural networks, so it can be carried out faster than in traditional methods.
 
-$x_{norm}=2 \cdot \frac{x-x_{min}}{x_{max}-x_{min}} - 1$
+[FIGURE 10]
 
-**denormalize_input** reverts normalized values from $[-1, 1]$ back to the original range $[xmin, xmax]$.
+### Fast Stokes synthesis
 
-### **`Dataset class`**
+The fast Stokes synthesizer implements the cross-modal path that is illustrated in \autoref{fig:synthesizer_diagram}. Given a physical atmospheric model as input, the model encoder projects it into the shared latent space, producing a latent vector $\textbf{z}_m \in \mathbb{R}^{64}$, which is then decoded by the Stokes decoder to produce a synthetic Stokes profile. As with the inverter, this path was not part of the explicit training, so its performance reflects the quality of the contrastive alignment between the two encoders. The synthesizer represents the forward problem: given known physical conditions, producing the corresponding observational parameters.
 
-Provides both Stokes profiles abd physical model parameters for training.
+[FIGURE 15]
 
-Its inputs are:
-- `filename_stokes`: HDF5 file containing Stokes I, Q, U, V profiles.
-- `filename_model`: HDF5 file containing the physical model parameters (logtau, T, Pe, vmic, v, Bx, By, Bz).
-- `good_profiles_filename`: .npy file indexing "good" profiles to use.
-- `n_training`: Optional, number of examples to train on.
-- `noise`: Amount of gaussian noise to add for augmentation. 
+---
 
-#### `__init__(self, etc)`
+## Requirements
 
-- opens the hdf5 files containing the data and then loads indices of good profiles (ind). Filters out only the good profiles using 'ind'.
-- sets dataset length: either all available samples or a subset (`n_training`).
-- defines normalization bounds for all Stokes parameters (I, Q, U, V) and model parameters (T, vmic, v, Bx, By, Bz). These are later used in `normalize_input()`.
+The model was implemented in Python using the following packages:
 
-#### `__getitem__(self, index)`
-
-This method is called by Pytorch for eahc sample during training.
-
-- Extracts the Stokes parameters for the given index and adds noise to them for data augmentation, which helps the model generalize better. Also converts the I, Q, U, V into fractions Q/I, U/I, V/I, as is standard in spectropolarimetry. 
-- Rescales all inputs with `normalize_input` into `[-1,1]`for neural network stability. Then, does the same thing for model parameters (T, vmic, v, Bx, By, Bz).
-- Returns two arrays per sample: out_stokes and out_model.
-
-#### `__len__(self, index)`
-
-Required by Pytorch, returns the number of training samples in the dataset.
-
-### **`DatasetHinode class`**
-Similar to Dataset but tailored for real Hinode solar data (no physical model parameters). I imagine this is used during validation. The key differences are:
-- No physical model parameters (because it's used for indference, not supervised training).
-- Extracts subsets from 2D solar images.
-- This is used for validation or for checking inversion capacity with real observations.
-
-Finally, the script does a quick test to see if the dataset loads correctly and prints out the first sample and te¡hen the data size.
-
-# **`train directory`**
-
-## **`train_clip.py`**
-
-This script uses a CLIP contrastive learning training loop that learns to align two modalities:
-- Stokes profiles: 4x112 wavelengths, flattened to 4*112 (4 parameters sampled in 112 points).
-- Models (physical parameters): 6x80 layers, flattened to 6*80 (6 parameters sampled in 80 points).
-It uses two encoders (encoder_stokes and encoder_models) to map these into a common latent space (latent_dim) and optimizes a symmetric contrastives loss (CLIP). Optionally it also uses decoders and saves checkpoints.
-
-**Note**: The code starts off by defining `merge_images', which isn't actually used anywhere.
-
-### **`CLIPLoss class`**
-
-Simple contrastive loss.
-**PENDING**: get a deeper understanding.
-
-### **`CLIPLossMultiModal class`**
-
-Supports multi-modal contrastive learning between 'n' modalities (implemented for n=2 and n=3).
-
-### **`Training class`** 
-
-- Reads the hyperparameters from the configuration file 'config.yaml', which is given in the main function at the end. Then defines a logger 'training' for output and sets up a console handler. Checks if GPU is available (in which case, its usage will be monitored) and decides the computing device (GPU/CPU).
-
-- Definition of the neural networks: encoders and decoders are defined for the models and Stokes profiles. Both sets are defined as `resnet.ResidualNet` (see `modules` directory) instances, with parameters:
-    - `in_features`: 
-        - `encoder_models`: 6*80 (6 model params x 80 sampled points).
-        - `encoder_stokes`: 4*112 (4 Stokes params x 112 sampled wavelengths).
-    - `out_features`: latent_dim from the config file (embedding dimension).
-    - **ETCETERA**.
-
-It might be better if I simply use this for brief summaries/overviews of how each script works and what it does, and leave the exhaustive explanatory comments for the code itself.
+- [NumPy](https://numpy.org/)
+- [Matplotlib](https://matplotlib.org/)
+- [PyTorch](https://pytorch.org/)
+- [h5py](https://www.h5py.org/)
+- [scikit-learn](https://scikit-learn.org/)
