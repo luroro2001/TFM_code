@@ -5,35 +5,35 @@ import numpy as np
 import matplotlib.pyplot as pl
 
 # L: scales input data x from range [xmin, xmax] to [-1,1]
-# L: nn's train better when inputs are normalized
+# L: nn's train better when inputs are normalized, so this is applied to all parameters 
+# before the are fed into the network 
 def normalize_input(x, xmin, xmax):
     return 2.0 * (x - xmin) / (xmax - xmin) - 1.0 #L: linear scalng formula
 
 
 # L: reverts normalized values from [-1,1] back to [xmin, xmax]
+# L: defined again at the start of validate.py
 def denormalize_output(x, xmin, xmax):
     return 0.5 * (x + 1.0) * (xmax - xmin) + xmin # L: despejando x de la funcion anterior
 
 class Dataset(torch.utils.data.Dataset):
     """
     Dataset class that will provide data during training. Modify it accordingly
-    for your dataset. This one shows how to do augmenting during training for a 
-    very simple training set 
+    for the dataset. This one shows how to do augmenting (L: ?, leftover comment) during training for a 
+    for a very simple training set 
 
     L: This class provides both stokes profiles and physical model parameters for training.   
     """
     def __init__(self, filename_stokes, filename_model, good_profiles_filename, n_training=None, noise=0.0):
         """
-        ?? Very simple training set made of 200 Gaussians of width between 0.5 and 1.5
-        ?? We later augment this with a velocity and amplitude.
+        Initialize the dataset (synthetic Stokes and their atmospheric modles) stores in HDF5 files.
         
         Args:
             n_training (int): number of training examples including augmenting
-            # L:
             filename_stokes: HDF5 file with Stokes I, Q, U, V profiles
-            filename model: HDF5 file with the physical model parameters (temp, vel, B_i, etc)
-            good_profiles_filename: .npy file indexing 'good' profiles to use
-            noise: amount of gaussian noise to add 
+            filename_model: HDF5 file with the physical model parameters (temp, vel, B_i, etc)
+            good_profiles_filename: numpy files with indices of valid profiles to use
+            noise: stdv of gaussian noise added to the Stokes profiles
         """
         super(Dataset, self).__init__()
 
@@ -151,6 +151,7 @@ class Dataset(torch.utils.data.Dataset):
         out_stokes = np.concatenate((out_stokesI[None, :], out_stokesQ[None, :], out_stokesU[None, :], out_stokesV[None, :]), axis=0)
         out_model = np.concatenate((out_T[None, :], out_vmic[None, :], out_v[None, :], out_Bx[None, :], out_By[None, :], out_Bz[None, :]), axis=0)
 
+        # L: (the correct pairings are maintained because of the common indices across both datasets)
         return out_stokes.astype('float32'), out_model.astype('float32')
 
     def __len__(self):
@@ -159,17 +160,15 @@ class Dataset(torch.utils.data.Dataset):
 
 class DatasetHinode(torch.utils.data.Dataset):
     """
-    Dataset class that will provide data during training. Modify it accordingly
+    Dataset class that could provide data during training. Modify it accordingly
     for your dataset. This one shows how to do augmenting during training for a 
-    very simple training set    .
+    very simple training set. L: LEFTOVER OLD COMMENT, this is not actually used.
 
     L: similar to Dataset but tailored for real Hinode solar data (no physical model parameters).
-    I imagine this is used during validation.
+    It's not used in the model.
     """
     def __init__(self, filename_stokes, startx=0, starty=0, nx=0, ny=0):
         """
-        Very simple training set made of 200 Gaussians of width between 0.5 and 1.5
-        We later augment this with a velocity and amplitude.
         
         Args:
             n_training (int): number of training examples including augmenting
