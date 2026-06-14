@@ -525,14 +525,13 @@ class Testing(object):
 
         stokes_labels = ["I", "Q", "U", "V"]
         print("\n--- Fast Synthesis RMS---")
-        for i, label in enumerate(stokes_labels):
-            print(f"  Stokes {label}: {rms_per_component[i]:.5f}")
+        for i, label in enumerate(stokes_labels): print(f"  Stokes {label}: {rms_per_component[i]:.5f}")
 
         # reunite all ball results
         if n_ball > 0:
             ball_profiles_all = np.concatenate(ball_list, axis=0) # (N, n_ball, 4, 112)
             ball_mean = ball_profiles_all.mean(axis=1) # (N, 4, 112)
-            ball_std  = ball_profiles_all.std(axis=1)  # (N, 4, 112)
+            ball_std = ball_profiles_all.std(axis=1)  # (N, 4, 112)
         else:
             ball_profiles_all = None
             ball_mean = None
@@ -540,27 +539,27 @@ class Testing(object):
 
         return {
             'synthesized_stokes': synthesized_stokes,
-            'residuals':          residuals,
-            'rms_per_profile':    rms_per_profile,
-            'rms_per_component':  rms_per_component,
-            'ball_profiles':      ball_profiles_all,
-            'ball_mean':          ball_mean,
-            'ball_std':           ball_std,
+            'residuals': residuals,
+            'rms_per_profile':rms_per_profile,
+            'rms_per_component': rms_per_component,
+            'ball_profiles': ball_profiles_all,
+            'ball_mean': ball_mean,
+            'ball_std': ball_std,
         }
 
 
     def plot_fast_synthesis_results(self, stokes_all, synthesis_results, n_samples=3, indices=None):
 
         synthesized_stokes = synthesis_results['synthesized_stokes']
-        residuals          = synthesis_results['residuals']
-        rms_per_profile    = synthesis_results['rms_per_profile']
+        residuals = synthesis_results['residuals']
+        rms_per_profile = synthesis_results['rms_per_profile']
         rms_per_component  = synthesis_results['rms_per_component']
-        ball_profiles      = synthesis_results['ball_profiles']
-        ball_mean          = synthesis_results['ball_mean']
-        ball_std           = synthesis_results['ball_std']
+        ball_profiles = synthesis_results['ball_profiles']
+        ball_mean = synthesis_results['ball_mean']
+        ball_std = synthesis_results['ball_std']
 
         has_ball = ball_profiles is not None
-        n_ball   = ball_profiles.shape[1] if has_ball else 0
+        n_ball = ball_profiles.shape[1] if has_ball else 0
 
         stokes_labels = [r"I", r"Q/I$_c$", r"U/I$_c$", r"V/I$_c$"]
         N = stokes_all.shape[0]
@@ -579,7 +578,7 @@ class Testing(object):
         for s in range(4):
             lo, hi = self.stokes_lower[s], self.stokes_upper[s]
             pred_phys = denormalize_output(synthesized_stokes[:, s, :], lo, hi)
-            gt_phys   = denormalize_output(stokes_all[:, s, :],         lo, hi)
+            gt_phys = denormalize_output(stokes_all[:, s, :],         lo, hi)
             rms_phys_per_profile[:, s] = np.sqrt(np.mean((pred_phys - gt_phys)**2, axis=1))
 
         # mean RMS in physical units across all samples
@@ -596,27 +595,21 @@ class Testing(object):
                 ax = axes[s]
                 lo, hi = self.stokes_lower[s], self.stokes_upper[s]
 
-                gt   = denormalize_output(stokes_all[idx, s],          lo, hi)
-                pred = denormalize_output(synthesized_stokes[idx, s],  lo, hi)
+                gt   = denormalize_output(stokes_all[idx, s], lo, hi)
+                pred = denormalize_output(synthesized_stokes[idx, s], lo, hi)
 
                 if has_ball:
                     for b in range(n_ball):
                         bp = denormalize_output(ball_profiles[idx, b, s], lo, hi)
-                        ax.plot(self.wavelength, bp,
-                                color='lightblue', alpha=0.15, linewidth=0.4)
+                        ax.plot(self.wavelength, bp, color='lightblue', alpha=0.15, linewidth=0.4)
 
                     bm = denormalize_output(ball_mean[idx, s], lo, hi)
                     bs = ball_std[idx, s] * 0.5 * (hi - lo)
-                    ax.fill_between(self.wavelength, bm - bs, bm + bs,
-                                    color='steelblue', alpha=0.35, label='Ball ±1σ')
-                    ax.plot(self.wavelength, bm,
-                            color='steelblue', linewidth=1.5,
-                            linestyle='--', label='Ball mean')
+                    ax.fill_between(self.wavelength, bm - bs, bm + bs, color='steelblue', alpha=0.35, label='Ball ±1σ')
+                    ax.plot(self.wavelength, bm, color='steelblue', linewidth=1.5, linestyle='--', label='Ball mean')
 
-                ax.plot(self.wavelength, pred,
-                        color='red',   linewidth=1.5, linestyle='--', label='Synthesized')
-                ax.plot(self.wavelength, gt,
-                        color='black', linewidth=1.5, label='Ground truth')
+                ax.plot(self.wavelength, pred, color='red',   linewidth=1.5, linestyle='--', label='Synthesized')
+                ax.plot(self.wavelength, gt, color='black', linewidth=1.5, label='Ground truth')
 
                 rms_val = rms_phys_per_profile[idx, s]
                 ax.set_title(f"{label}   (RMS = {rms_val:.4f})", fontsize=13)
@@ -642,20 +635,16 @@ class Testing(object):
             lo, hi = self.stokes_lower[s], self.stokes_upper[s]
 
             pred_phys = denormalize_output(synthesized_stokes[:, s, :], lo, hi)
-            gt_phys   = denormalize_output(stokes_all[:, s, :],         lo, hi)
-            res_flat  = (pred_phys - gt_phys).flatten()
+            gt_phys = denormalize_output(stokes_all[:, s, :], lo, hi)
+            res_flat = (pred_phys - gt_phys).flatten()
 
-            ax.hist(res_flat, bins=80,
-                    color='rebeccapurple', edgecolor='none', density=True)
+            ax.hist(res_flat, bins=80, color='rebeccapurple', edgecolor='none', density=True)
             ax.axvline(0, color='black', linestyle='--', linewidth=1.2)
             ax.set_title(label, fontsize=13)
             ax.set_xlabel(f"Residual [{label}]", fontsize=12)
             ax.set_ylabel("Density", fontsize=12)
             ax.tick_params(labelsize=11)
-            ax.text(0.97, 0.95,
-                    f"μ = {res_flat.mean():.4f}\nσ = {res_flat.std():.4f}",
-                    transform=ax.transAxes, ha='right', va='top', fontsize=10,
-                    bbox=dict(boxstyle='round,pad=0.3', facecolor='white', alpha=0.7))
+            ax.text(0.97, 0.95, f"μ = {res_flat.mean():.4f}\nσ = {res_flat.std():.4f}", transform=ax.transAxes, ha='right', va='top', fontsize=10, bbox=dict(boxstyle='round,pad=0.3', facecolor='white', alpha=0.7))
 
         pl.tight_layout()
         out = os.path.join(self.output_dir, "synthesis_residuals.pdf")
@@ -667,14 +656,10 @@ class Testing(object):
         # Figure 3: RMS bar chart 
         # ------------------------------------------------------------------
         fig, ax = pl.subplots(figsize=(7, 5))
-        bars = ax.bar(stokes_labels, rms_phys_per_component,
-                    color=['steelblue', 'coral', 'mediumseagreen', 'orchid'])
+        bars = ax.bar(stokes_labels, rms_phys_per_component, color=['steelblue', 'coral', 'mediumseagreen', 'orchid'])
 
         for bar, val in zip(bars, rms_phys_per_component):
-            ax.text(bar.get_x() + bar.get_width() / 2.0,
-                    bar.get_height() * 1.01,
-                    f"{val:.4f}",
-                    ha='center', va='bottom', fontsize=11)
+            ax.text(bar.get_x() + bar.get_width() / 2.0, bar.get_height() * 1.01, f"{val:.4f}", ha='center', va='bottom', fontsize=11)
 
         ax.set_xlabel("Stokes parameter", fontsize=13)
         ax.set_ylabel("Mean RMS (physical units)", fontsize=13)
@@ -719,11 +704,7 @@ class Testing(object):
         stokes_tensor = torch.tensor(stokes_all, dtype=torch.float32)
         models_tensor = torch.tensor(models_all, dtype=torch.float32)
 
-        loader = torch.utils.data.DataLoader(
-            torch.utils.data.TensorDataset(stokes_tensor, models_tensor),
-            batch_size=self.batch_size,
-            shuffle=False
-        )
+        loader = torch.utils.data.DataLoader(torch.utils.data.TensorDataset(stokes_tensor, models_tensor), batch_size=self.batch_size,shuffle=False)
 
         inverted_list = []
         ball_list = []
@@ -747,7 +728,7 @@ class Testing(object):
                 inverted_list.append(inverted.cpu().numpy())
 
                 # Ball "experiment"? Otherwise known as "lo de la bola"
-                # For each sample in the batch, we draw n_ball small Gaussian perturbations
+                # For each sample in the batch, we draw n_ball small gaussian perturbations
                 # around its latent point z and decode each one. This  will show us how
                 # sensitive the output Stokes profiles are to small movements in latent space.
                 if n_ball > 0:
@@ -778,51 +759,50 @@ class Testing(object):
 
         model_labels = ["T", "vmic", "v", "Bx", "By", "Bz"]
         print("\n--- Fast Inversion RMS (normalized units) ---")
-        for i, label in enumerate(model_labels):
-            print(f"  {label}: {rms_per_component[i]:.5f}")
+        for i, label in enumerate(model_labels): print(f"  {label}: {rms_per_component[i]:.5f}")
 
         # assemble all the ball results
         if n_ball > 0:
             ball_profiles_all = np.concatenate(ball_list, axis=0)   # (N, n_ball, 6, 80)
             ball_mean = ball_profiles_all.mean(axis=1) # (N, 6, 80)
-            ball_std  = ball_profiles_all.std(axis=1)  # (N, 6, 80)
+            ball_std = ball_profiles_all.std(axis=1)  # (N, 6, 80)
         else:
             ball_profiles_all = None
             ball_mean = None
-            ball_std  = None
+            ball_std = None
 
         return {
-            'inverted_models':  inverted_models,
-            'residuals':        residuals,
-            'rms_per_profile':  rms_per_profile,
+            'inverted_models': inverted_models,
+            'residuals': residuals,
+            'rms_per_profile': rms_per_profile,
             'rms_per_component':rms_per_component,
-            'ball_profiles':    ball_profiles_all,
-            'ball_mean':        ball_mean,
-            'ball_std':         ball_std,
-            'ball_sigma':       ball_sigma,
+            'ball_profiles': ball_profiles_all,
+            'ball_mean': ball_mean,
+            'ball_std': ball_std,
+            'ball_sigma': ball_sigma,
         }
 
 
     def plot_fast_inversion_results(self, models_all, inversion_results, n_samples=3, indices=None):
 
-        inverted_models   = inversion_results['inverted_models']
-        residuals         = inversion_results['residuals']
-        rms_per_profile   = inversion_results['rms_per_profile']
+        inverted_models = inversion_results['inverted_models']
+        residuals = inversion_results['residuals']
+        rms_per_profile = inversion_results['rms_per_profile']
         rms_per_component = inversion_results['rms_per_component']
-        ball_profiles     = inversion_results['ball_profiles']
-        ball_mean         = inversion_results['ball_mean']
-        ball_std          = inversion_results['ball_std']
-        ball_sigma        = inversion_results['ball_sigma']
+        ball_profiles = inversion_results['ball_profiles']
+        ball_mean = inversion_results['ball_mean']
+        ball_std = inversion_results['ball_std']
+        ball_sigma = inversion_results['ball_sigma']
 
         has_ball = ball_profiles is not None
-        n_ball   = ball_profiles.shape[1] if has_ball else 0
+        n_ball = ball_profiles.shape[1] if has_ball else 0
 
         model_labels = ["T", "v$_\mathrm{mic}$", "v", "B$_x$", "B$_y$", "B$_z$"]
         colors = ['steelblue', 'coral', 'mediumseagreen', 'orchid', 'goldenrod', 'tomato']
         N = models_all.shape[0]
 
-        depth_mask   = self.logtau >= self.logtau_cutoff
-        logtau_plot  = self.logtau[depth_mask]
+        depth_mask = self.logtau >= self.logtau_cutoff
+        logtau_plot= self.logtau[depth_mask]
 
         if not hasattr(self, 'output_dir'):
             timestamp = datetime.now().strftime("%Y-%m-%d_%H%M%S")
@@ -838,7 +818,7 @@ class Testing(object):
         for m in range(6):
             lo, hi = self.model_lower[m], self.model_upper[m]
             pred_phys = denormalize_output(inverted_models[:, m, :][:, depth_mask], lo, hi)
-            gt_phys   = denormalize_output(models_all[:, m, :][:, depth_mask],      lo, hi)
+            gt_phys = denormalize_output(models_all[:, m, :][:, depth_mask],      lo, hi)
             rms_phys_per_profile[:, m] = np.sqrt(np.mean((pred_phys - gt_phys)**2, axis=1))
 
         rms_phys_per_component = rms_phys_per_profile.mean(axis=0)  # (6,)
@@ -854,31 +834,24 @@ class Testing(object):
                 ax = axes[m]
                 lo, hi = self.model_lower[m], self.model_upper[m]
 
-                gt   = denormalize_output(models_all[idx, m][depth_mask],     lo, hi)
+                gt = denormalize_output(models_all[idx, m][depth_mask], lo, hi)
                 pred = denormalize_output(inverted_models[idx, m][depth_mask], lo, hi)
 
                 if has_ball:
                     for b in range(n_ball):
                         bp = denormalize_output(ball_profiles[idx, b, m][depth_mask], lo, hi)
-                        ax.plot(logtau_plot, bp,
-                                color='lightblue', alpha=0.15, linewidth=0.4)
+                        ax.plot(logtau_plot, bp, color='lightblue', alpha=0.15, linewidth=0.4)
 
                     bm = denormalize_output(ball_mean[idx, m][depth_mask], lo, hi)
                     bs = ball_std[idx, m][depth_mask] * 0.5 * (hi - lo)
-                    ax.fill_between(logtau_plot, bm - bs, bm + bs,
-                                    color='steelblue', alpha=0.35, label='Ball ±1σ')
-                    ax.plot(logtau_plot, bm,
-                            color='steelblue', linewidth=1.5,
-                            linestyle='--', label='Ball mean')
+                    ax.fill_between(logtau_plot, bm - bs, bm + bs, color='steelblue', alpha=0.35, label='Ball ±1σ')
+                    ax.plot(logtau_plot, bm, color='steelblue', linewidth=1.5, linestyle='--', label='Ball mean')
 
-                ax.plot(logtau_plot, pred,
-                        color='red',   linewidth=1.5, linestyle='--', label='Inverted')
-                ax.plot(logtau_plot, gt,
-                        color='black', linewidth=1.5, label='Ground truth')
+                ax.plot(logtau_plot, pred, color='red',   linewidth=1.5, linestyle='--', label='Inverted')
+                ax.plot(logtau_plot, gt, color='black', linewidth=1.5, label='Ground truth')
 
                 rms_val = rms_phys_per_profile[idx, m]
-                ax.set_title(f"{label}   (RMS = {rms_val:.2f} {self.model_units[m]})",
-                            fontsize=13)
+                ax.set_title(f"{label}   (RMS = {rms_val:.2f} {self.model_units[m]})", fontsize=13)
                 ax.set_xlabel("log τ", fontsize=12)
                 ax.set_ylabel(f"{label} [{self.model_units[m]}]", fontsize=12)
                 ax.tick_params(labelsize=11)
@@ -904,23 +877,17 @@ class Testing(object):
             ax = axes[m]
             lo, hi = self.model_lower[m], self.model_upper[m]
 
-            pred_phys = denormalize_output(
-                inverted_models[:, m, :][:, depth_mask], lo, hi)
-            gt_phys   = denormalize_output(
-                models_all[:, m, :][:, depth_mask],      lo, hi)
-            res_flat  = (pred_phys - gt_phys).flatten()
+            pred_phys = denormalize_output(inverted_models[:, m, :][:, depth_mask], lo, hi)
+            gt_phys = denormalize_output(models_all[:, m, :][:, depth_mask], lo, hi)
+            res_flat = (pred_phys - gt_phys).flatten()
 
-            ax.hist(res_flat, bins=80,
-                    color='rebeccapurple', edgecolor='none', density=True)
+            ax.hist(res_flat, bins=80, color='rebeccapurple', edgecolor='none', density=True)
             ax.axvline(0, color='black', linestyle='--', linewidth=1.2)
             ax.set_title(label, fontsize=13)
             ax.set_xlabel(f"Residual [{self.model_units[m]}]", fontsize=12)
             ax.set_ylabel("Density", fontsize=12)
             ax.tick_params(labelsize=11)
-            ax.text(0.97, 0.95,
-                    f"μ = {res_flat.mean():.2f}\nσ = {res_flat.std():.2f}",
-                    transform=ax.transAxes, ha='right', va='top', fontsize=10,
-                    bbox=dict(boxstyle='round,pad=0.3', facecolor='white', alpha=0.7))
+            ax.text(0.97, 0.95, f"μ = {res_flat.mean():.2f}\nσ = {res_flat.std():.2f}", transform=ax.transAxes, ha='right', va='top', fontsize=10, bbox=dict(boxstyle='round,pad=0.3', facecolor='white', alpha=0.7))
 
         pl.tight_layout()
         out = os.path.join(self.output_dir, "inversion_residuals.pdf")
@@ -931,18 +898,12 @@ class Testing(object):
         # ------------------------------------------------------------------
         # Figure 3: RMS bar chart 
         # ------------------------------------------------------------------
-        unit_labels = [f"{lb}\n[{u}]" for lb, u in
-                    zip(["T", "v$_\mathrm{mic}$", "v",
-                            "B$_x$", "B$_y$", "B$_z$"], self.model_units)]
+        unit_labels = [f"{lb}\n[{u}]" for lb, u in zip(["T", "v$_\mathrm{mic}$", "v", "B$_x$", "B$_y$", "B$_z$"], self.model_units)]
 
         fig, ax = pl.subplots(figsize=(9, 5))
         bars = ax.bar(unit_labels, rms_phys_per_component, color=colors)
 
-        for bar, val in zip(bars, rms_phys_per_component):
-            ax.text(bar.get_x() + bar.get_width() / 2.0,
-                    bar.get_height() * 1.01,
-                    f"{val:.2f}",
-                    ha='center', va='bottom', fontsize=11)
+        for bar, val in zip(bars, rms_phys_per_component): ax.text(bar.get_x() + bar.get_width() / 2.0, bar.get_height() * 1.01, f"{val:.2f}", ha='center', va='bottom', fontsize=11)
 
         ax.set_xlabel("Model parameter", fontsize=13)
         ax.set_ylabel("Mean RMS (physical units)", fontsize=13)
@@ -952,25 +913,6 @@ class Testing(object):
         pl.savefig(out, dpi=150)
         print(f"Saved {out}")
         pl.close()
-
-
-# L: just checking. REMOVE LATER
-#with h5py.File('../database/models_testing.h5', 'r') as f:
-#    logtau = f['model'][0, :, 0]  # first sample, all depths, logtau column
-#    print(logtau)
-
-#with h5py.File('../database/stokes_testing.h5', 'r') as f:
-#    print(f.keys())
-#    print(f['spec1'].keys())  # or whatever the top-level group is
-
-#with h5py.File('../database/stokes_testing.h5', 'r') as f:
-#    print(f['spec1']['stokes'].shape)
-#print(np.linspace(1.5, -7.5, 80))
-
-#with h5py.File('../database/stokes_testing.h5', 'r') as f:
-#    wav = f['spec1']['wavelength'][:] # The wavelength is in Ångströms, centered around the Fe I 6302 Å line
-#    print(wav.shape)
-#    print(wav)
 
 
 if (__name__ == '__main__'):
