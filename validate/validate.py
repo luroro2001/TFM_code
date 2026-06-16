@@ -366,7 +366,7 @@ class Testing(object):
 
         n_params = len(params)
         n_cols = 2
-        n_rows = 3  # 3x2 fills a portrait page cleanly
+        n_rows = 3  
 
         fig, axes = pl.subplots(n_rows, n_cols, figsize=(12, 16))
         axes = axes.flatten()
@@ -954,14 +954,15 @@ if (__name__ == '__main__'):
     fixed_indices = [3426, 987, 3252]
     
     # Fast Stokes synthesis
-    synthesis_results = deepnet.fast_stokes_synthesis(models, stokes, n_ball=100, ball_sigma=0.02)    
-    deepnet.plot_fast_synthesis_results(stokes, synthesis_results, n_samples=3, indices=fixed_indices)
+    #synthesis_results = deepnet.fast_stokes_synthesis(models, stokes, n_ball=100, ball_sigma=0.02)    
+    #deepnet.plot_fast_synthesis_results(stokes, synthesis_results, n_samples=3, indices=fixed_indices)
 
     # Fast Stokes inversion
-    inversion_results = deepnet.fast_stokes_inversion(stokes, models, n_ball=100, ball_sigma=0.02)
-    deepnet.plot_fast_inversion_results(models, inversion_results, n_samples=3, indices=fixed_indices)
+    #inversion_results = deepnet.fast_stokes_inversion(stokes, models, n_ball=100, ball_sigma=0.02)
+    #deepnet.plot_fast_inversion_results(models, inversion_results, n_samples=3, indices=fixed_indices)
 
     # t-SNE representation of latent space
+    deepnet.plot_tsne_joint(z_stokes, z_models, models, height_idx=20, use_pca=False, depth_avg=True)
     #deepnet.plot_tsne_joint(z_stokes, z_models, models, height_idx=20, use_pca=False, depth_avg=False)
     #deepnet.plot_tsne_joint(z_stokes, z_models, models, height_idx=40, use_pca=False, depth_avg=False)
     #deepnet.plot_tsne_joint(z_stokes, z_models, models, height_idx=60, use_pca=False, depth_avg=False)
